@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <title>短链接生成器</title>
+  </head>
+
+  <body class="bg-gray-100 min-h-screen flex items-center justify-center py-20">
+    <div id="app" class="bg-wite w-screen p-8 rounded-lg shadow-2xl max-w-3xl">
+      <h1 class="text-2xl font-semibold mb-4">短链接生成器</h1>
+      <input
+        v-model="url"
+        @blur="validateUrl"
+        type="text"
+        class="w-full p-2 border rounded mb-2"
+        placeholder="输入长链接"
+      />
+      <div class="text-red-500 text-sm mb-2" v-show="invalid">请输入有效的URL。</div>
+      <input v-model="key" type="text" class="w-full p-2 border rounded mb-4" placeholder="自定义短链接（可选）" />
+      <button
+        class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 focus:outline-none"
+        @click="handleSubmit"
+      >
+        生成短链接
+      </button>
+
+      <!-- 短链接结果 -->
+      <div id="shortUrl" class="mt-4 text-red-600">{{ shortUrl }}</div>
+
+      <!-- 已生成的链接 -->
+      <h2 class="text-xl font-semibold mt-4">已生成的链接</h2>
+      <div class="mt-4">
+        <div class="flex bg-blue-100 p-4 mb-2 rounded-lg" v-for="item in urls">
+          <div class="grow truncate">
+            <div class="font-semibold">
+              <a :href="'https://' + item.shortUrl" class="text-blue-900 hover:underline">{{ item.shortUrl }}</a>
+              <span class="ml-2 text-blue-900 cursor-pointer" @click="handleCopy(item.shortUrl)">复制</span>
+            </div>
+            <div class="mt-1 text-blue-900 truncate">{{ item.url }}</div>
+          </div>
+          <div
+            class="ml-4 text-red-500 flex items-center justify-center cursor-pointer"
+            @click="handleDelete(item.key)"
+          >
+            ×
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { createApp, ref } = Vue;
+
+      createApp({
+        setup() {
+          const url = ref('');
+          const key = ref('');
+          const shortUrl = ref('');
+          const invalid = ref(false);
+          const urls = ref([]);
+
+          urls.value = JSON.parse(localStorage.getItem('urls')) || [];
+
+          const validateUrl = () => {
+            const urlPattern = /^(https?|http):\/\/[^\s$.?#].[^\s]*$/;
+            if (urlPattern.test(url.value)) {
+              invalid.value = false;
+            } else {
+              invalid.value = true;
+            }
+          };
+
+          const handleCopy = (url) => {
+            navigator.clipboard.writeText(url);
+          };
+
+          const handleSubmit = async () => {
+            validateUrl();
+            if (invalid.value) {
+              return;
+            }
+            const { data: res } = await axios.post('/add', {
+              key: key.value,
+              url: url.value
+            });
+
+            if (res.status === 200) {
+              urls.value.push({
+                key: key.value || res.key,
+                shortUrl: location.hostname + '/' + (key.value || res.key),
+                url: url.value
+              });
+              shortUrl.value = location.hostname + '/' + (key.value || res.key);
+              url.value = '';
+              key.value = '';
+              localStorage.setItem('urls', JSON.stringify(urls.value));
+            }
+          };
+
+          const handleDelete = async (key) => {
+            const { data: res } = await axios.post('/delete', { key });
+            if (res.status === 200) {
+              urls.value = urls.value.filter((item) => item.key !== key);
+              localStorage.setItem('urls', JSON.stringify(urls.value));
+            }
+          };
+
+          return {
+            url,
+            key,
+            shortUrl,
+            urls,
+            invalid,
+            validateUrl,
+            handleCopy,
+            handleSubmit,
+            handleDelete
+          };
+        }
+      }).mount('#app');
+    </script>
+  </body>
+</html>
